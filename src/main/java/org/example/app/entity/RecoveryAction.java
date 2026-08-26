@@ -33,6 +33,17 @@ public class RecoveryAction {
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
+    @Column(nullable = false)
+    private String decisionSource;
+
+    @Column(length = 1000)
+    private String aiDiagnosis;
+
+    private Double confidence;
+
+    @Column(length = 1500)
+    private String aiReasoning;
+
     private LocalDateTime executedAt;
 
     public enum ActionType {
@@ -114,5 +125,37 @@ public class RecoveryAction {
 
     public void setExecutedAt(LocalDateTime executedAt) {
         this.executedAt = executedAt;
+    }
+
+    public String getDecisionSource() {
+        return decisionSource;
+    }
+
+    public void setDecisionSource(String decisionSource) {
+        this.decisionSource = decisionSource;
+    }
+
+    public String getAiDiagnosis() {
+        return aiDiagnosis;
+    }
+
+    public void setAiDiagnosis(String aiDiagnosis) {
+        this.aiDiagnosis = aiDiagnosis;
+    }
+
+    public Double getConfidence() {
+        return confidence;
+    }
+
+    public void setConfidence(Double confidence) {
+        this.confidence = confidence;
+    }
+
+    public String getAiReasoning() {
+        return aiReasoning;
+    }
+
+    public void setAiReasoning(String aiReasoning) {
+        this.aiReasoning = aiReasoning;
     }
 }

@@ -1,5 +1,7 @@
 package org.example.app.services;
 
+import org.example.app.agent.RevenueRecoveryAgent;
+import org.example.app.dto.AiRecoveryDecision;
 import org.example.app.entity.AuditLog;
 import org.example.app.entity.RecoveryAction;
 import org.example.app.entity.RevenueRisk;
@@ -16,17 +18,20 @@ public class RecoveryService {
     private final RecoveryActionRepository recoveryActionRepository;
     private final AuditLogRepository auditLogRepository;
     private final PolicyService policyService;
+    private final RevenueRecoveryAgent revenueRecoveryAgent;
 
     public RecoveryService(
             RevenueRiskRepository revenueRiskRepository,
             RecoveryActionRepository recoveryActionRepository,
             AuditLogRepository auditLogRepository,
-            PolicyService policyService
+            PolicyService policyService,
+            RevenueRecoveryAgent revenueRecoveryAgent
     ) {
         this.revenueRiskRepository = revenueRiskRepository;
         this.recoveryActionRepository = recoveryActionRepository;
         this.auditLogRepository = auditLogRepository;
         this.policyService = policyService;
+        this.revenueRecoveryAgent = revenueRecoveryAgent;
     }
 
     @Transactional
@@ -41,11 +46,11 @@ public class RecoveryService {
                                 )
                         );
 
-        RecoveryAction.ActionType actionType =
-                determineRecoveryAction(revenueRisk);
+        DecisionResult decisionResult =
+                getRecoveryDecision(revenueRisk);
 
-        String reason =
-                determineActionReason(revenueRisk);
+        RecoveryAction.ActionType actionType =
+                decisionResult.actionType();
 
         boolean approved =
                 policyService.isActionAllowed(
@@ -58,7 +63,26 @@ public class RecoveryService {
 
         recoveryAction.setRevenueRisk(revenueRisk);
         recoveryAction.setActionType(actionType);
-        recoveryAction.setReason(reason);
+        recoveryAction.setReason(
+                decisionResult.reason()
+        );
+
+        recoveryAction.setDecisionSource(
+                decisionResult.source()
+        );
+
+        recoveryAction.setAiDiagnosis(
+                decisionResult.diagnosis()
+        );
+
+        recoveryAction.setConfidence(
+                decisionResult.confidence()
+        );
+
+        recoveryAction.setAiReasoning(
+                decisionResult.reason()
+        );
+
         recoveryAction.setApproved(approved);
 
         if (approved) {
@@ -74,10 +98,14 @@ public class RecoveryService {
             createAuditLog(
                     revenueRisk.getId(),
                     "RECOVERY_APPROVED",
-                    "Recovery action approved: "
+                    "Source: "
+                            + decisionResult.source()
+                            + ", Action: "
                             + actionType
-                            + ". Reason: "
-                            + reason
+                            + ", Confidence: "
+                            + decisionResult.confidence()
+                            + ", Reason: "
+                            + decisionResult.reason()
             );
 
         } else {
@@ -89,8 +117,10 @@ public class RecoveryService {
             createAuditLog(
                     revenueRisk.getId(),
                     "RECOVERY_BLOCKED",
-                    "Recovery action blocked by policy engine: "
+                    "Policy engine blocked action "
                             + actionType
+                            + " suggested by "
+                            + decisionResult.source()
             );
         }
 
@@ -101,7 +131,78 @@ public class RecoveryService {
         );
     }
 
-    private RecoveryAction.ActionType determineRecoveryAction(
+    private DecisionResult getRecoveryDecision(
+            RevenueRisk revenueRisk
+    ) {
+
+        try {
+
+            AiRecoveryDecision aiDecision =
+                    revenueRecoveryAgent.analyze(
+                            revenueRisk
+                    );
+
+            RecoveryAction.ActionType actionType =
+                    parseAction(
+                            aiDecision.getRecommendedAction()
+                    );
+
+            return new DecisionResult(
+                    actionType,
+                    "AI",
+                    aiDecision.getDiagnosis(),
+                    aiDecision.getConfidence(),
+                    aiDecision.getReason()
+            );
+
+        } catch (Exception exception) {
+
+            RecoveryAction.ActionType fallbackAction =
+                    determineFallbackAction(
+                            revenueRisk
+                    );
+
+            String fallbackReason =
+                    determineFallbackReason(
+                            revenueRisk
+                    );
+
+            createAuditLog(
+                    revenueRisk.getId(),
+                    "AI_FALLBACK",
+                    "AI decision failed. "
+                            + "Fallback rule engine used. "
+                            + "Cause: "
+                            + exception.getClass()
+                            .getSimpleName()
+            );
+
+            return new DecisionResult(
+                    fallbackAction,
+                    "RULE_FALLBACK",
+                    "AI unavailable",
+                    1.0,
+                    fallbackReason
+            );
+        }
+    }
+
+    private RecoveryAction.ActionType parseAction(
+            String action
+    ) {
+
+        if (action == null) {
+            throw new IllegalArgumentException(
+                    "AI returned no recovery action"
+            );
+        }
+
+        return RecoveryAction.ActionType.valueOf(
+                action.trim().toUpperCase()
+        );
+    }
+
+    private RecoveryAction.ActionType determineFallbackAction(
             RevenueRisk revenueRisk
     ) {
 
@@ -127,32 +228,29 @@ public class RecoveryService {
         };
     }
 
-    private String determineActionReason(
+    private String determineFallbackReason(
             RevenueRisk revenueRisk
     ) {
 
         return switch (revenueRisk.getReason()) {
 
             case EXPIRED_CARD ->
-                    "Customer payment method appears expired. "
-                            + "Request payment method update.";
+                    "Expired payment method. Request payment method update.";
 
             case INSUFFICIENT_FUNDS ->
-                    "Payment failed due to insufficient funds. "
-                            + "Wait before retrying.";
+                    "Insufficient funds. Wait before another retry.";
 
             case BANK_DECLINED ->
-                    "Bank declined the payment. "
-                            + "A controlled retry may recover the payment.";
+                    "Bank declined payment. Use a controlled retry.";
 
             case AUTHENTICATION_REQUIRED ->
-                    "Payment requires customer authentication.";
+                    "Customer authentication is required.";
 
             case FRAUD_SUSPECTED ->
-                    "Fraud is suspected. Automated payment recovery is unsafe.";
+                    "Fraud suspicion requires human review.";
 
             case UNKNOWN ->
-                    "Failure reason is unknown and requires human review.";
+                    "Unknown failure requires human review.";
         };
     }
 
@@ -180,5 +278,14 @@ public class RecoveryService {
         auditLogRepository.save(
                 auditLog
         );
+    }
+
+    private record DecisionResult(
+            RecoveryAction.ActionType actionType,
+            String source,
+            String diagnosis,
+            Double confidence,
+            String reason
+    ) {
     }
 }
