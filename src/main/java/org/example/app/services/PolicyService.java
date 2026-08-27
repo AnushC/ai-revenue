@@ -62,4 +62,17 @@ public class PolicyService {
 
         return true;
     }
+    public boolean hasReachedMaximumAttempts(
+            RevenueRisk revenueRisk
+    ) {
+
+        long previousActions =
+                recoveryActionRepository
+                        .countByRevenueRiskId(
+                                revenueRisk.getId()
+                        );
+
+        return previousActions
+                >= MAX_RECOVERY_ACTIONS;
+    }
 }
