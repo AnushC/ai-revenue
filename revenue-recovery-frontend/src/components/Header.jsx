@@ -6,9 +6,9 @@ import {
 
 export default function Header() {
     return (
-        <header className="flex h-20 items-center justify-between border-b border-slate-200 bg-white px-8">
+        <header className="flex min-h-20 items-center justify-between border-b border-slate-200 bg-white px-4 sm:px-6 lg:px-8">
 
-            <div className="relative w-80">
+            <div className="relative hidden w-80 md:block">
 
                 <Search
                     size={17}
@@ -22,9 +22,9 @@ export default function Header() {
 
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="ml-auto flex items-center gap-3">
 
-                <div className="flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5">
+                <div className="hidden items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 sm:flex">
 
                     <Sparkles
                         size={14}
@@ -37,7 +37,7 @@ export default function Header() {
 
                 </div>
 
-                <button className="relative rounded-xl border border-slate-200 p-2.5 text-slate-500 hover:bg-slate-50">
+                <button className="rounded-xl border border-slate-200 p-2.5 text-slate-500 hover:bg-slate-50">
                     <Bell size={18} />
                 </button>
 

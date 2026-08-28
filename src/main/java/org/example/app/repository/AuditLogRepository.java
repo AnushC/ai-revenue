@@ -11,4 +11,6 @@ public interface AuditLogRepository
     List<AuditLog> findByRevenueRiskIdOrderByCreatedAtAsc(
             Long revenueRiskId
     );
+
+    List<AuditLog> findAllByOrderByCreatedAtDesc();
 }

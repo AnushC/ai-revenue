@@ -23,20 +23,18 @@ import { Link } from "react-router-dom";
 import StatCard from "../components/StatCard";
 import StatusBadge from "../components/StatusBadge";
 
+
 import {
     getDashboardAnalytics,
     getRevenueRisks,
+    getRecoveryTrend,
 } from "../api/api";
 
-const chartData = [
-    { name: "Mon", recovered: 4200 },
-    { name: "Tue", recovered: 6800 },
-    { name: "Wed", recovered: 5400 },
-    { name: "Thu", recovered: 9200 },
-    { name: "Fri", recovered: 11800 },
-    { name: "Sat", recovered: 10400 },
-    { name: "Sun", recovered: 14200 },
-];
+
+
+
+
+
 
 function money(value) {
     return new Intl.NumberFormat("en-IN", {
@@ -59,6 +57,9 @@ export default function Dashboard() {
 
     const [error, setError] =
         useState("");
+    const [trend, setTrend] =
+        useState([]);
+
 
     useEffect(() => {
 
@@ -69,13 +70,21 @@ export default function Dashboard() {
                 const [
                     analyticsResponse,
                     risksResponse,
+                    trendResponse,
                 ] = await Promise.all([
                     getDashboardAnalytics(),
                     getRevenueRisks(),
+                    getRecoveryTrend(),
                 ]);
 
                 setAnalytics(
                     analyticsResponse.data
+                );
+
+                setTrend(
+                    Array.isArray(trendResponse.data)
+                        ? trendResponse.data
+                        : []
                 );
 
                 setRisks(
@@ -144,7 +153,7 @@ export default function Dashboard() {
                 </div>
             )}
 
-            <div className="grid grid-cols-4 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
 
                 <StatCard
                     title="Revenue at Risk"
@@ -185,9 +194,9 @@ export default function Dashboard() {
 
             </div>
 
-            <div className="mt-6 grid grid-cols-3 gap-6">
+            <div className="mt-6 grid grid-cols-1 xl:grid-cols-3 gap-6">
 
-                <div className="col-span-2 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="xl:col-span-2 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
 
                     <div className="mb-6">
 
@@ -207,7 +216,7 @@ export default function Dashboard() {
                             width="100%"
                             height="100%"
                         >
-                            <AreaChart data={chartData}>
+                            <AreaChart data={trend}>
 
                                 <defs>
                                     <linearGradient
@@ -237,11 +246,21 @@ export default function Dashboard() {
                                     stroke="#e2e8f0"
                                 />
 
+
                                 <XAxis
-                                    dataKey="name"
+                                    dataKey="date"
                                     axisLine={false}
                                     tickLine={false}
                                     tick={{ fontSize: 12 }}
+                                    tickFormatter={(value) =>
+                                        new Date(value).toLocaleDateString(
+                                            "en-IN",
+                                            {
+                                                day: "2-digit",
+                                                month: "short",
+                                            }
+                                        )
+                                    }
                                 />
 
                                 <YAxis
@@ -254,7 +273,7 @@ export default function Dashboard() {
 
                                 <Area
                                     type="monotone"
-                                    dataKey="recovered"
+                                    dataKey="amountRecovered"
                                     stroke="#6366f1"
                                     strokeWidth={2}
                                     fill="url(#recoveryGradient)"

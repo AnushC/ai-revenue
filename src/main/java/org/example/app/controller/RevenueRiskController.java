@@ -24,11 +24,26 @@ public class RevenueRiskController {
         return revenueRiskRepository.findAll();
     }
 
+    @GetMapping("/{id}")
+    public RevenueRisk getById(
+            @PathVariable Long id
+    ) {
+
+        return revenueRiskRepository
+                .findById(id)
+                .orElseThrow(() ->
+                        new RuntimeException(
+                                "Revenue risk not found: "
+                                        + id
+                        )
+                );
+    }
+
     @GetMapping("/open")
     public List<RevenueRisk> getOpenRisks() {
-
-        return revenueRiskRepository.findByStatus(
-                RevenueRisk.RiskStatus.OPEN
-        );
+        return revenueRiskRepository
+                .findByStatus(
+                        RevenueRisk.RiskStatus.OPEN
+                );
     }
 }

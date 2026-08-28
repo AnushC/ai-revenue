@@ -7,13 +7,15 @@ export default function DashboardLayout() {
     return (
         <div className="min-h-screen bg-[#f7f8fa]">
 
-            <Sidebar />
+            <div className="hidden lg:block">
+                <Sidebar />
+            </div>
 
-            <div className="ml-64">
+            <div className="lg:ml-64">
 
                 <Header />
 
-                <main className="p-8">
+                <main className="p-4 sm:p-6 lg:p-8">
                     <Outlet />
                 </main>
 

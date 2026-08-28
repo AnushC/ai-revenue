@@ -28,4 +28,10 @@ export const analyzeRisk = (id) =>
 export const getAuditLogs = (id) =>
     api.get(`/recovery/${id}/audit`);
 
+export const getAllAuditLogs = () =>
+    api.get("/recovery/audit/all");
+
+export const getRecoveryTrend = () =>
+    api.get("/analytics/recovery-trend");
+
 export default api;

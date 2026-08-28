@@ -7,6 +7,12 @@ import org.example.app.repository.RecoveryActionRepository;
 import org.example.app.repository.RecoveryOutcomeRepository;
 import org.example.app.repository.RevenueRiskRepository;
 import org.springframework.stereotype.Service;
+import org.example.app.dto.RecoveryTrendPoint;
+
+import java.time.LocalDate;
+import java.util.Comparator;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -165,5 +171,52 @@ public class AnalyticsService {
         );
 
         return dashboard;
+
+    }
+    public List<RecoveryTrendPoint> getRecoveryTrend() {
+
+        List<RecoveryOutcome> outcomes =
+                recoveryOutcomeRepository.findAll();
+
+        Map<LocalDate, BigDecimal> grouped =
+                outcomes.stream()
+                        .filter(outcome ->
+                                outcome.getStatus()
+                                        == RecoveryOutcome
+                                        .OutcomeStatus
+                                        .RECOVERED
+                        )
+                        .filter(outcome ->
+                                outcome.getCreatedAt() != null
+                        )
+                        .collect(
+                                Collectors.groupingBy(
+                                        outcome ->
+                                                outcome
+                                                        .getCreatedAt()
+                                                        .toLocalDate(),
+                                        Collectors.reducing(
+                                                BigDecimal.ZERO,
+                                                RecoveryOutcome
+                                                        ::getAmountRecovered,
+                                                BigDecimal::add
+                                        )
+                                )
+                        );
+
+        return grouped.entrySet()
+                .stream()
+                .map(entry ->
+                        new RecoveryTrendPoint(
+                                entry.getKey(),
+                                entry.getValue()
+                        )
+                )
+                .sorted(
+                        Comparator.comparing(
+                                RecoveryTrendPoint::getDate
+                        )
+                )
+                .toList();
     }
 }

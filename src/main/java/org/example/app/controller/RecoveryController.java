@@ -60,4 +60,10 @@ public class RecoveryController {
                         revenueRiskId
                 );
     }
+
+    @GetMapping("/audit/all")
+    public List<AuditLog> getAllAuditLogs() {
+        return auditLogRepository
+                .findAllByOrderByCreatedAtDesc();
+    }
 }

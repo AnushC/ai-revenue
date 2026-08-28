@@ -3,6 +3,9 @@ package org.example.app.controller;
 import org.example.app.dto.DashboardAnalytics;
 import org.example.app.services.AnalyticsService;
 import org.springframework.web.bind.annotation.*;
+import org.example.app.dto.RecoveryTrendPoint;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/analytics")
@@ -21,5 +24,10 @@ public class AnalyticsController {
 
         return analyticsService
                 .getDashboardAnalytics();
+    }
+
+    @GetMapping("/recovery-trend")
+    public List<RecoveryTrendPoint> getRecoveryTrend() {
+        return analyticsService.getRecoveryTrend();
     }
 }
