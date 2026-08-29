@@ -569,7 +569,7 @@ export default function RiskDetails() {
                                 "RECOVERED"
                             }
                             className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 py-3 text-sm font-medium text-white transition hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
+
                             <Play size={16} />
 
                             {running
