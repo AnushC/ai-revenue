@@ -9,36 +9,67 @@ import {
 } from "lucide-react";
 
 import { NavLink } from "react-router-dom";
-
-const navigation = [
-    {
-        name: "Overview",
-        path: "/",
-        icon: LayoutDashboard,
-    },
-    {
-        name: "Revenue Risks",
-        path: "/risks",
-        icon: TriangleAlert,
-    },
-    {
-        name: "Recovery Center",
-        path: "/recovery",
-        icon: RefreshCcw,
-    },
-    {
-        name: "Human Review",
-        path: "/human-review",
-        icon: UserCheck,
-    },
-    {
-        name: "Audit Log",
-        path: "/audit",
-        icon: ScrollText,
-    },
-];
+import { useAuth } from "../context/AuthContext";
 
 export default function Sidebar() {
+
+    const { user } = useAuth();
+
+    const navigation = [
+        {
+            name: "Overview",
+            path: "/",
+            icon: LayoutDashboard,
+            roles: [
+                "ADMIN",
+                "RECOVERY_ANALYST",
+                "REVIEWER",
+            ],
+        },
+        {
+            name: "Revenue Risks",
+            path: "/risks",
+            icon: TriangleAlert,
+            roles: [
+                "ADMIN",
+                "RECOVERY_ANALYST",
+                "REVIEWER",
+            ],
+        },
+        {
+            name: "Recovery Center",
+            path: "/recovery",
+            icon: RefreshCcw,
+            roles: [
+                "ADMIN",
+                "RECOVERY_ANALYST",
+            ],
+        },
+        {
+            name: "Human Review",
+            path: "/human-review",
+            icon: UserCheck,
+            roles: [
+                "ADMIN",
+                "REVIEWER",
+            ],
+        },
+        {
+            name: "Audit Log",
+            path: "/audit",
+            icon: ScrollText,
+            roles: [
+                "ADMIN",
+                "RECOVERY_ANALYST",
+                "REVIEWER",
+            ],
+        },
+    ];
+
+    const visibleNavigation = navigation.filter(
+        (item) => item.roles.includes(user?.role)
+    );
+
     return (
         <aside className="fixed left-0 top-0 flex h-screen w-64 flex-col bg-[#0c111d] px-4 py-6 text-white">
 
@@ -62,7 +93,8 @@ export default function Sidebar() {
 
             <nav className="flex-1 space-y-1">
 
-                {navigation.map((item) => {
+                {visibleNavigation.map((item) => {
+
                     const Icon = item.icon;
 
                     return (

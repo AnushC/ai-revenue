@@ -34,6 +34,17 @@ public class RevenueRisk {
     @Column(nullable = false)
     private RiskStatus status;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "review_status")
+    private ReviewStatus reviewStatus = ReviewStatus.NONE;
+
+    public enum ReviewStatus {
+        NONE,
+        PENDING,
+        APPROVED,
+        REJECTED
+    }
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
@@ -112,6 +123,14 @@ public class RevenueRisk {
 
     public void setStatus(RiskStatus status) {
         this.status = status;
+    }
+
+    public ReviewStatus getReviewStatus() {
+        return reviewStatus;
+    }
+
+    public void setReviewStatus(ReviewStatus reviewStatus) {
+        this.reviewStatus = reviewStatus;
     }
 
 }

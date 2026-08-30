@@ -16,9 +16,31 @@ public class RecoveryAction {
     @JoinColumn(name = "revenue_risk_id", nullable = false)
     private RevenueRisk revenueRisk;
 
+    /*
+     * Final action after policy evaluation.
+     *
+     * Example:
+     * Gemini recommends RETRY_PAYMENT
+     * Policy requires review
+     * actionType = HUMAN_REVIEW
+     */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private ActionType actionType;
+
+    /*
+     * Original action proposed by Gemini/fallback.
+     *
+     * This allows a reviewer to approve the original
+     * action after HUMAN_REVIEW.
+     *
+     * Example:
+     * actionType = HUMAN_REVIEW
+     * proposedActionType = RETRY_PAYMENT
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "proposed_action_type")
+    private ActionType proposedActionType;
 
     @Column(nullable = false)
     private String reason;
@@ -79,7 +101,9 @@ public class RecoveryAction {
         return revenueRisk;
     }
 
-    public void setRevenueRisk(RevenueRisk revenueRisk) {
+    public void setRevenueRisk(
+            RevenueRisk revenueRisk
+    ) {
         this.revenueRisk = revenueRisk;
     }
 
@@ -87,15 +111,30 @@ public class RecoveryAction {
         return actionType;
     }
 
-    public void setActionType(ActionType actionType) {
+    public void setActionType(
+            ActionType actionType
+    ) {
         this.actionType = actionType;
+    }
+
+    public ActionType getProposedActionType() {
+        return proposedActionType;
+    }
+
+    public void setProposedActionType(
+            ActionType proposedActionType
+    ) {
+        this.proposedActionType =
+                proposedActionType;
     }
 
     public String getReason() {
         return reason;
     }
 
-    public void setReason(String reason) {
+    public void setReason(
+            String reason
+    ) {
         this.reason = reason;
     }
 
@@ -103,7 +142,9 @@ public class RecoveryAction {
         return approved;
     }
 
-    public void setApproved(Boolean approved) {
+    public void setApproved(
+            Boolean approved
+    ) {
         this.approved = approved;
     }
 
@@ -111,7 +152,9 @@ public class RecoveryAction {
         return status;
     }
 
-    public void setStatus(ActionStatus status) {
+    public void setStatus(
+            ActionStatus status
+    ) {
         this.status = status;
     }
 
@@ -123,7 +166,9 @@ public class RecoveryAction {
         return executedAt;
     }
 
-    public void setExecutedAt(LocalDateTime executedAt) {
+    public void setExecutedAt(
+            LocalDateTime executedAt
+    ) {
         this.executedAt = executedAt;
     }
 
@@ -131,15 +176,20 @@ public class RecoveryAction {
         return decisionSource;
     }
 
-    public void setDecisionSource(String decisionSource) {
-        this.decisionSource = decisionSource;
+    public void setDecisionSource(
+            String decisionSource
+    ) {
+        this.decisionSource =
+                decisionSource;
     }
 
     public String getAiDiagnosis() {
         return aiDiagnosis;
     }
 
-    public void setAiDiagnosis(String aiDiagnosis) {
+    public void setAiDiagnosis(
+            String aiDiagnosis
+    ) {
         this.aiDiagnosis = aiDiagnosis;
     }
 
@@ -147,7 +197,9 @@ public class RecoveryAction {
         return confidence;
     }
 
-    public void setConfidence(Double confidence) {
+    public void setConfidence(
+            Double confidence
+    ) {
         this.confidence = confidence;
     }
 
@@ -155,7 +207,9 @@ public class RecoveryAction {
         return aiReasoning;
     }
 
-    public void setAiReasoning(String aiReasoning) {
+    public void setAiReasoning(
+            String aiReasoning
+    ) {
         this.aiReasoning = aiReasoning;
     }
 }

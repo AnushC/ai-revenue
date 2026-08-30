@@ -5,6 +5,7 @@ import org.example.app.dto.WorkflowResult;
 import org.example.app.services.BatchRecoveryService;
 import org.example.app.services.RecoveryWorkflowService;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 @RestController
 @RequestMapping("/api/workflows")
@@ -25,6 +26,7 @@ public class RecoveryWorkflowController {
     }
 
     @PostMapping("/run/{revenueRiskId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECOVERY_ANALYST')")
     public WorkflowResult runWorkflow(
             @PathVariable Long revenueRiskId
     ) {
@@ -35,10 +37,11 @@ public class RecoveryWorkflowController {
                 );
     }
 
-    @PostMapping("/run-batch")
-    public BatchWorkflowResult runBatch() {
 
-        return batchRecoveryService
-                .runBatch();
+
+    @PostMapping("/run-batch")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECOVERY_ANALYST')")
+    public BatchWorkflowResult runBatch() {
+        return batchRecoveryService.runBatch();
     }
 }

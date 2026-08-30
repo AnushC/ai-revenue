@@ -2,6 +2,7 @@ package org.example.app.services;
 
 import org.example.app.agent.RevenueRecoveryAgent;
 import org.example.app.dto.AiRecoveryDecision;
+import org.example.app.dto.PolicyDecision;
 import org.example.app.entity.AuditLog;
 import org.example.app.entity.RecoveryAction;
 import org.example.app.entity.RevenueRisk;
@@ -17,28 +18,45 @@ public class RecoveryService {
     private final RevenueRiskRepository revenueRiskRepository;
     private final RecoveryActionRepository recoveryActionRepository;
     private final AuditLogRepository auditLogRepository;
-    private final PolicyService policyService;
+    private final PolicyEngineService policyEngineService;
     private final RevenueRecoveryAgent revenueRecoveryAgent;
 
     public RecoveryService(
             RevenueRiskRepository revenueRiskRepository,
             RecoveryActionRepository recoveryActionRepository,
             AuditLogRepository auditLogRepository,
-            PolicyService policyService,
+            PolicyEngineService policyEngineService,
             RevenueRecoveryAgent revenueRecoveryAgent
     ) {
-        this.revenueRiskRepository = revenueRiskRepository;
-        this.recoveryActionRepository = recoveryActionRepository;
-        this.auditLogRepository = auditLogRepository;
-        this.policyService = policyService;
-        this.revenueRecoveryAgent = revenueRecoveryAgent;
+
+        this.revenueRiskRepository =
+                revenueRiskRepository;
+
+        this.recoveryActionRepository =
+                recoveryActionRepository;
+
+        this.auditLogRepository =
+                auditLogRepository;
+
+        this.policyEngineService =
+                policyEngineService;
+
+        this.revenueRecoveryAgent =
+                revenueRecoveryAgent;
     }
 
     @Transactional
-    public RecoveryAction startRecovery(Long revenueRiskId) {
+    public RecoveryAction startRecovery(
+            Long revenueRiskId
+    ) {
 
+        /*
+         * STEP 1:
+         * Load revenue risk.
+         */
         RevenueRisk revenueRisk =
-                revenueRiskRepository.findById(revenueRiskId)
+                revenueRiskRepository
+                        .findById(revenueRiskId)
                         .orElseThrow(() ->
                                 new RuntimeException(
                                         "Revenue risk not found: "
@@ -46,25 +64,92 @@ public class RecoveryService {
                                 )
                         );
 
+        /*
+         * STEP 2:
+         * Get Gemini or fallback decision.
+         */
         DecisionResult decisionResult =
-                getRecoveryDecision(revenueRisk);
-
-        RecoveryAction.ActionType actionType =
-                decisionResult.actionType();
-
-        boolean approved =
-                policyService.isActionAllowed(
-                        revenueRisk,
-                        actionType
+                getRecoveryDecision(
+                        revenueRisk
                 );
 
+        /*
+         * This is what Gemini/fallback originally
+         * recommended.
+         */
+        RecoveryAction.ActionType proposedActionType =
+                decisionResult.actionType();
+
+        /*
+         * Initially the final action is the same
+         * as the proposed action.
+         */
+        RecoveryAction.ActionType finalActionType =
+                proposedActionType;
+
+        /*
+         * STEP 3:
+         * Run deterministic policy checks.
+         */
+        PolicyDecision policyDecision =
+                policyEngineService.evaluate(
+                        revenueRisk,
+                        proposedActionType,
+                        decisionResult.confidence(),
+                        "AI".equals(
+                                decisionResult.source()
+                        )
+                );
+
+        /*
+         * STEP 4:
+         * Policy may override the proposed action.
+         */
+        if (policyDecision.getDecision()
+                == PolicyDecision.Decision.HUMAN_REVIEW) {
+
+            finalActionType =
+                    RecoveryAction.ActionType.HUMAN_REVIEW;
+        }
+
+        /*
+         * BLOCKED means no action is authorized.
+         *
+         * HUMAN_REVIEW is allowed as an escalation,
+         * but no payment recovery is executed.
+         */
+        boolean approved =
+                policyDecision.getDecision()
+                        != PolicyDecision.Decision.BLOCKED;
+
+        /*
+         * STEP 5:
+         * Build RecoveryAction.
+         */
         RecoveryAction recoveryAction =
                 new RecoveryAction();
 
-        recoveryAction.setRevenueRisk(revenueRisk);
-        recoveryAction.setActionType(actionType);
+        recoveryAction.setRevenueRisk(
+                revenueRisk
+        );
+
+        /*
+         * Final policy-controlled action.
+         */
+        recoveryAction.setActionType(
+                finalActionType
+        );
+
+        /*
+         * IMPORTANT:
+         * Preserve Gemini/fallback's original action.
+         */
+        recoveryAction.setProposedActionType(
+                proposedActionType
+        );
+
         recoveryAction.setReason(
-                decisionResult.reason()
+                policyDecision.getReason()
         );
 
         recoveryAction.setDecisionSource(
@@ -83,33 +168,62 @@ public class RecoveryService {
                 decisionResult.reason()
         );
 
-        recoveryAction.setApproved(approved);
+        recoveryAction.setApproved(
+                approved
+        );
 
+        /*
+         * STEP 6:
+         * Handle approved or human-review action.
+         */
         if (approved) {
 
             recoveryAction.setStatus(
                     RecoveryAction.ActionStatus.PENDING
             );
 
-            revenueRisk.setStatus(
-                    RevenueRisk.RiskStatus.IN_RECOVERY
-            );
+            /*
+             * HUMAN_REVIEW means recovery execution
+             * has NOT started yet.
+             */
+            if (finalActionType
+                    != RecoveryAction.ActionType.HUMAN_REVIEW) {
+
+                revenueRisk.setStatus(
+                        RevenueRisk.RiskStatus.IN_RECOVERY
+                );
+            }
+
+            String eventType =
+                    finalActionType
+                            == RecoveryAction.ActionType.HUMAN_REVIEW
+                            ? "HUMAN_REVIEW_REQUIRED"
+                            : "RECOVERY_APPROVED";
 
             createAuditLog(
                     revenueRisk.getId(),
-                    "RECOVERY_APPROVED",
+                    eventType,
                     "Source: "
                             + decisionResult.source()
-                            + ", Action: "
-                            + actionType
+                            + ", Proposed Action: "
+                            + proposedActionType
+                            + ", Final Action: "
+                            + finalActionType
                             + ", Confidence: "
                             + decisionResult.confidence()
-                            + ", Reason: "
+                            + ", Policy: "
+                            + policyDecision.getDecision()
+                            + ", Policy Reason: "
+                            + policyDecision.getReason()
+                            + ", AI Reason: "
                             + decisionResult.reason()
             );
 
         } else {
 
+            /*
+             * Policy completely blocked recovery.
+             */
             recoveryAction.setStatus(
                     RecoveryAction.ActionStatus.BLOCKED
             );
@@ -117,19 +231,33 @@ public class RecoveryService {
             createAuditLog(
                     revenueRisk.getId(),
                     "RECOVERY_BLOCKED",
-                    "Policy engine blocked action "
-                            + actionType
-                            + " suggested by "
+                    "Source: "
                             + decisionResult.source()
+                            + ", Proposed Action: "
+                            + proposedActionType
+                            + ", Confidence: "
+                            + decisionResult.confidence()
+                            + ", Policy: "
+                            + policyDecision.getDecision()
+                            + ", Policy Reason: "
+                            + policyDecision.getReason()
             );
         }
 
-        revenueRiskRepository.save(revenueRisk);
+        revenueRiskRepository.save(
+                revenueRisk
+        );
 
         return recoveryActionRepository.save(
                 recoveryAction
         );
     }
+
+    /*
+     * ============================================================
+     * GEMINI / FALLBACK
+     * ============================================================
+     */
 
     private DecisionResult getRecoveryDecision(
             RevenueRisk revenueRisk
@@ -173,7 +301,8 @@ public class RecoveryService {
                     "AI decision failed. "
                             + "Fallback rule engine used. "
                             + "Cause: "
-                            + exception.getClass()
+                            + exception
+                            .getClass()
                             .getSimpleName()
             );
 
@@ -192,15 +321,24 @@ public class RecoveryService {
     ) {
 
         if (action == null) {
+
             throw new IllegalArgumentException(
                     "AI returned no recovery action"
             );
         }
 
         return RecoveryAction.ActionType.valueOf(
-                action.trim().toUpperCase()
+                action
+                        .trim()
+                        .toUpperCase()
         );
     }
+
+    /*
+     * ============================================================
+     * FALLBACK RULES
+     * ============================================================
+     */
 
     private RecoveryAction.ActionType determineFallbackAction(
             RevenueRisk revenueRisk
@@ -209,22 +347,28 @@ public class RecoveryService {
         return switch (revenueRisk.getReason()) {
 
             case EXPIRED_CARD ->
-                    RecoveryAction.ActionType.SEND_PAYMENT_LINK;
+                    RecoveryAction.ActionType
+                            .SEND_PAYMENT_LINK;
 
             case INSUFFICIENT_FUNDS ->
-                    RecoveryAction.ActionType.WAIT_AND_RETRY;
+                    RecoveryAction.ActionType
+                            .WAIT_AND_RETRY;
 
             case BANK_DECLINED ->
-                    RecoveryAction.ActionType.RETRY_PAYMENT;
+                    RecoveryAction.ActionType
+                            .RETRY_PAYMENT;
 
             case AUTHENTICATION_REQUIRED ->
-                    RecoveryAction.ActionType.REQUEST_AUTHENTICATION;
+                    RecoveryAction.ActionType
+                            .REQUEST_AUTHENTICATION;
 
             case FRAUD_SUSPECTED ->
-                    RecoveryAction.ActionType.HUMAN_REVIEW;
+                    RecoveryAction.ActionType
+                            .HUMAN_REVIEW;
 
             case UNKNOWN ->
-                    RecoveryAction.ActionType.HUMAN_REVIEW;
+                    RecoveryAction.ActionType
+                            .HUMAN_REVIEW;
         };
     }
 
@@ -235,13 +379,16 @@ public class RecoveryService {
         return switch (revenueRisk.getReason()) {
 
             case EXPIRED_CARD ->
-                    "Expired payment method. Request payment method update.";
+                    "Expired payment method. "
+                            + "Request payment method update.";
 
             case INSUFFICIENT_FUNDS ->
-                    "Insufficient funds. Wait before another retry.";
+                    "Insufficient funds. "
+                            + "Wait before another retry.";
 
             case BANK_DECLINED ->
-                    "Bank declined payment. Use a controlled retry.";
+                    "Bank declined payment. "
+                            + "Use a controlled retry.";
 
             case AUTHENTICATION_REQUIRED ->
                     "Customer authentication is required.";
@@ -253,6 +400,12 @@ public class RecoveryService {
                     "Unknown failure requires human review.";
         };
     }
+
+    /*
+     * ============================================================
+     * AUDIT
+     * ============================================================
+     */
 
     private void createAuditLog(
             Long revenueRiskId,

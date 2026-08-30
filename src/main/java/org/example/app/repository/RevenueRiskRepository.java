@@ -8,6 +8,10 @@ import java.util.List;
 public interface RevenueRiskRepository
         extends JpaRepository<RevenueRisk, Long> {
 
+    List<RevenueRisk> findByReviewStatus(
+            RevenueRisk.ReviewStatus reviewStatus
+    );
+
     List<RevenueRisk> findByStatus(
             RevenueRisk.RiskStatus status
     );

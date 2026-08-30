@@ -2,9 +2,45 @@ import {
     Bell,
     Search,
     Sparkles,
+    LogOut,
 } from "lucide-react";
 
+import {
+    useNavigate,
+} from "react-router-dom";
+
+import {
+    useAuth,
+} from "../context/AuthContext";
+
 export default function Header() {
+
+    const navigate =
+        useNavigate();
+
+    const {
+        user,
+        logout,
+    } = useAuth();
+
+    function handleLogout() {
+
+        logout();
+
+        navigate(
+            "/login",
+            {
+                replace: true,
+            }
+        );
+    }
+
+    const initial =
+        user?.name
+            ?.charAt(0)
+            ?.toUpperCase() ??
+        "U";
+
     return (
         <header className="flex min-h-20 items-center justify-between border-b border-slate-200 bg-white px-4 sm:px-6 lg:px-8">
 
@@ -38,12 +74,41 @@ export default function Header() {
                 </div>
 
                 <button className="rounded-xl border border-slate-200 p-2.5 text-slate-500 hover:bg-slate-50">
+
                     <Bell size={18} />
+
                 </button>
 
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
-                    A
+                <div className="hidden text-right sm:block">
+
+                    <p className="text-sm font-medium text-slate-800">
+                        {user?.name}
+                    </p>
+
+                    <p className="text-xs text-slate-400">
+                        {user?.role?.replaceAll(
+                            "_",
+                            " "
+                        )}
+                    </p>
+
                 </div>
+
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
+
+                    {initial}
+
+                </div>
+
+                <button
+                    onClick={handleLogout}
+                    title="Logout"
+                    className="rounded-xl p-2.5 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
+                >
+
+                    <LogOut size={18} />
+
+                </button>
 
             </div>
 

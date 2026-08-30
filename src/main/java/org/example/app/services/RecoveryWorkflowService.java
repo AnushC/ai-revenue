@@ -6,7 +6,6 @@ import org.example.app.entity.RecoveryOutcome;
 import org.example.app.entity.RevenueRisk;
 import org.example.app.repository.RevenueRiskRepository;
 import org.springframework.stereotype.Service;
-import org.example.app.services.PolicyService;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Random;
@@ -17,16 +16,20 @@ public class RecoveryWorkflowService {
     private final RecoveryService recoveryService;
     private final RecoveryExecutionService recoveryExecutionService;
     private final RevenueRiskRepository revenueRiskRepository;
-    private final PolicyService policyService;
+    private final PolicyEngineService policyEngineService;
+    private final HumanReviewService humanReviewService;
 
-    private final Random random = new Random();
+    private final Random random =
+            new Random();
 
     public RecoveryWorkflowService(
             RecoveryService recoveryService,
             RecoveryExecutionService recoveryExecutionService,
             RevenueRiskRepository revenueRiskRepository,
-            PolicyService policyService
+            PolicyEngineService policyEngineService,
+            HumanReviewService humanReviewService
     ) {
+
         this.recoveryService =
                 recoveryService;
 
@@ -36,15 +39,21 @@ public class RecoveryWorkflowService {
         this.revenueRiskRepository =
                 revenueRiskRepository;
 
-        this.policyService =
-                policyService;
+        this.policyEngineService =
+                policyEngineService;
+
+        this.humanReviewService =
+                humanReviewService;
     }
 
     @Transactional
-    public WorkflowResult runWorkflow(Long revenueRiskId) {
+    public WorkflowResult runWorkflow(
+            Long revenueRiskId
+    ) {
 
         RevenueRisk revenueRisk =
-                revenueRiskRepository.findById(revenueRiskId)
+                revenueRiskRepository
+                        .findById(revenueRiskId)
                         .orElseThrow(() ->
                                 new RuntimeException(
                                         "Revenue risk not found: "
@@ -60,12 +69,18 @@ public class RecoveryWorkflowService {
         );
 
         /*
-         * Stop immediately if workflow is already finished.
+         * ========================================================
+         * STOPPING RULES
+         * ========================================================
          */
+
         if (revenueRisk.getStatus()
                 == RevenueRisk.RiskStatus.RECOVERED) {
 
-            result.setWorkflowStatus("STOPPED");
+            result.setWorkflowStatus(
+                    "STOPPED"
+            );
+
             result.setMessage(
                     "Revenue has already been recovered."
             );
@@ -76,7 +91,10 @@ public class RecoveryWorkflowService {
         if (revenueRisk.getStatus()
                 == RevenueRisk.RiskStatus.STOPPED) {
 
-            result.setWorkflowStatus("STOPPED");
+            result.setWorkflowStatus(
+                    "STOPPED"
+            );
+
             result.setMessage(
                     "Recovery workflow has already been stopped."
             );
@@ -87,7 +105,10 @@ public class RecoveryWorkflowService {
         if (revenueRisk.getStatus()
                 == RevenueRisk.RiskStatus.LOST) {
 
-            result.setWorkflowStatus("LOST");
+            result.setWorkflowStatus(
+                    "LOST"
+            );
+
             result.setMessage(
                     "Revenue risk is already marked as lost."
             );
@@ -96,9 +117,30 @@ public class RecoveryWorkflowService {
         }
 
         /*
-         * Step 1:
-         * Ask Gemini / fallback engine for recovery action.
+         * Do not automatically run a case while
+         * it is waiting for a human reviewer.
          */
+        if (revenueRisk.getReviewStatus()
+                == RevenueRisk.ReviewStatus.PENDING) {
+
+            result.setWorkflowStatus(
+                    "HUMAN_REVIEW"
+            );
+
+            result.setMessage(
+                    "Case is already waiting for human review."
+            );
+
+            return result;
+        }
+
+        /*
+         * ========================================================
+         * STEP 1:
+         * GEMINI + POLICY ENGINE
+         * ========================================================
+         */
+
         RecoveryAction recoveryAction =
                 recoveryService.startRecovery(
                         revenueRiskId
@@ -109,7 +151,9 @@ public class RecoveryWorkflowService {
         );
 
         result.setActionType(
-                recoveryAction.getActionType().name()
+                recoveryAction
+                        .getActionType()
+                        .name()
         );
 
         result.setDecisionSource(
@@ -123,14 +167,17 @@ public class RecoveryWorkflowService {
         );
 
         /*
-         * Step 2:
-         * Policy engine may have blocked the action.
+         * ========================================================
+         * STEP 2:
+         * POLICY BLOCKED
+         * ========================================================
          */
+
         if (!Boolean.TRUE.equals(
                 recoveryAction.getApproved()
         )) {
 
-            if (policyService
+            if (policyEngineService
                     .hasReachedMaximumAttempts(
                             revenueRisk
                     )) {
@@ -159,7 +206,8 @@ public class RecoveryWorkflowService {
                 );
 
                 result.setMessage(
-                        "Recovery action blocked by policy."
+                        "Recovery action blocked by policy. "
+                                + recoveryAction.getReason()
                 );
             }
 
@@ -167,25 +215,38 @@ public class RecoveryWorkflowService {
         }
 
         /*
-         * Human review is an escalation, not automatic execution.
+         * ========================================================
+         * STEP 3:
+         * HUMAN REVIEW
+         * ========================================================
          */
+
         if (recoveryAction.getActionType()
                 == RecoveryAction.ActionType.HUMAN_REVIEW) {
+
+            humanReviewService.sendToReview(
+                    revenueRiskId
+            );
 
             result.setWorkflowStatus(
                     "HUMAN_REVIEW"
             );
 
             result.setMessage(
-                    "Case escalated for human review."
+                    "Case automatically escalated for human review. "
+                            + recoveryAction.getReason()
             );
 
             return result;
         }
 
         /*
-         * STOP means no further recovery activity.
+         * ========================================================
+         * STEP 4:
+         * STOP
+         * ========================================================
          */
+
         if (recoveryAction.getActionType()
                 == RecoveryAction.ActionType.STOP) {
 
@@ -209,12 +270,12 @@ public class RecoveryWorkflowService {
         }
 
         /*
-         * Step 3:
-         * Simulate the external recovery result.
-         *
-         * Later this becomes:
-         * Stripe / Razorpay / email link / payment retry.
+         * ========================================================
+         * STEP 5:
+         * SIMULATE EXTERNAL RECOVERY
+         * ========================================================
          */
+
         boolean successful =
                 simulateRecoverySuccess(
                         recoveryAction
@@ -227,8 +288,17 @@ public class RecoveryWorkflowService {
                                 successful
                         );
 
+        /*
+         * ========================================================
+         * STEP 6:
+         * RESULT
+         * ========================================================
+         */
+
         if (outcome.getStatus()
-                == RecoveryOutcome.OutcomeStatus.RECOVERED) {
+                == RecoveryOutcome
+                .OutcomeStatus
+                .RECOVERED) {
 
             result.setWorkflowStatus(
                     "RECOVERED"
@@ -254,24 +324,38 @@ public class RecoveryWorkflowService {
         return result;
     }
 
+    /*
+     * Demo simulation only.
+     *
+     * This will later be replaceable by real integrations
+     * such as Razorpay/Stripe/payment links.
+     */
     private boolean simulateRecoverySuccess(
             RecoveryAction recoveryAction
     ) {
 
         double probability =
-                switch (recoveryAction.getActionType()) {
+                switch (
+                        recoveryAction.getActionType()
+                        ) {
 
-                    case SEND_PAYMENT_LINK -> 0.75;
+                    case SEND_PAYMENT_LINK ->
+                            0.75;
 
-                    case RETRY_PAYMENT -> 0.55;
+                    case RETRY_PAYMENT ->
+                            0.55;
 
-                    case WAIT_AND_RETRY -> 0.60;
+                    case WAIT_AND_RETRY ->
+                            0.60;
 
-                    case REQUEST_AUTHENTICATION -> 0.70;
+                    case REQUEST_AUTHENTICATION ->
+                            0.70;
 
-                    case HUMAN_REVIEW -> 0.0;
+                    case HUMAN_REVIEW ->
+                            0.0;
 
-                    case STOP -> 0.0;
+                    case STOP ->
+                            0.0;
                 };
 
         return random.nextDouble()

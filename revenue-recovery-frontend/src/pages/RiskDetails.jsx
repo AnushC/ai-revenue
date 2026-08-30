@@ -16,7 +16,6 @@ import {
     Play,
     CheckCircle2,
     Clock3,
-    AlertTriangle,
     IndianRupee,
 } from "lucide-react";
 
@@ -39,13 +38,15 @@ function money(value) {
     }).format(value ?? 0);
 }
 
+function readableStatus(value) {
+    return value?.replaceAll("_", " ") ?? "";
+}
+
 export default function RiskDetails() {
 
-    const { id } =
-        useParams();
+    const { id } = useParams();
 
-    const navigate =
-        useNavigate();
+    const navigate = useNavigate();
 
     const [risk, setRisk] =
         useState(null);
@@ -109,7 +110,6 @@ export default function RiskDetails() {
         } finally {
 
             setLoading(false);
-
         }
     }
 
@@ -131,6 +131,10 @@ export default function RiskDetails() {
                 response.data
             );
 
+            toast.success(
+                "Gemini analysis completed"
+            );
+
         } catch (err) {
 
             console.error(err);
@@ -139,10 +143,13 @@ export default function RiskDetails() {
                 "Gemini could not analyze this case."
             );
 
+            toast.error(
+                "Gemini analysis failed"
+            );
+
         } finally {
 
             setAnalyzing(false);
-
         }
     }
 
@@ -161,7 +168,10 @@ export default function RiskDetails() {
             setWorkflowResult(
                 response.data
             );
-            toast.error("Batch recovery success");
+
+            toast.success(
+                "Recovery workflow completed"
+            );
 
             await loadPage();
 
@@ -172,12 +182,14 @@ export default function RiskDetails() {
             setError(
                 "Recovery workflow failed."
             );
-            toast.error("Batch recovery failed");
+
+            toast.error(
+                "Recovery workflow failed"
+            );
 
         } finally {
 
             setRunning(false);
-
         }
     }
 
@@ -201,20 +213,32 @@ export default function RiskDetails() {
         );
     }
 
+    const riskScore =
+        Number(
+            risk.riskScore ?? 0
+        );
+
+    const isTerminal =
+        risk.status === "RECOVERED" ||
+        risk.status === "STOPPED" ||
+        risk.status === "LOST";
+
     return (
         <div className="mx-auto max-w-[1400px]">
 
+            {/* Back button */}
             <button
                 onClick={() =>
                     navigate("/risks")
                 }
-                className="mb-6 flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-900"
+                className="mb-6 flex items-center gap-2 text-sm font-medium text-slate-500 transition hover:text-slate-900"
             >
                 <ArrowLeft size={16} />
                 Back to revenue risks
             </button>
 
-            <div className="mb-8 flex items-start justify-between">
+            {/* Page header */}
+            <div className="mb-8 flex items-start justify-between gap-6">
 
                 <div>
 
@@ -223,9 +247,8 @@ export default function RiskDetails() {
                     </p>
 
                     <h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-900">
-                        {risk.reason?.replaceAll(
-                            "_",
-                            " "
+                        {readableStatus(
+                            risk.reason
                         )}
                     </h1>
 
@@ -241,38 +264,48 @@ export default function RiskDetails() {
 
             </div>
 
+            {/* Error */}
             {error && (
-                <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                    {error}
+
+                <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4">
+
+                    <p className="text-sm font-medium text-red-700">
+                        {error}
+                    </p>
+
                 </div>
+
             )}
 
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
 
-                <div className="xl:col-span-2 space-y-6">
+                {/* Main content */}
+                <div className="space-y-6 xl:col-span-2">
 
+                    {/* Revenue Risk Summary */}
                     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
 
-                        <h2 className="mb-6 font-semibold text-slate-900">
+                        <h2 className="mb-6 text-lg font-semibold text-slate-900">
                             Revenue Risk
                         </h2>
 
-                        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
 
-                            <div>
+                            {/* Amount */}
+                            <div className="border-b border-slate-100 pb-5 md:border-b-0 md:border-r md:pb-0 md:pr-6">
 
-                                <p className="text-xs uppercase tracking-wider text-slate-400">
+                                <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
                                     Amount at Risk
                                 </p>
 
-                                <div className="mt-2 flex items-center gap-2">
+                                <div className="mt-3 flex items-center gap-2">
 
                                     <IndianRupee
-                                        size={18}
+                                        size={19}
                                         className="text-indigo-500"
                                     />
 
-                                    <p className="text-xl font-semibold text-slate-900">
+                                    <p className="text-2xl font-semibold tracking-tight text-slate-900">
                                         {money(
                                             risk.amountAtRisk
                                         )}
@@ -280,33 +313,58 @@ export default function RiskDetails() {
 
                                 </div>
 
+                                <p className="mt-2 text-xs text-slate-400">
+                                    Potential revenue impact
+                                </p>
+
                             </div>
 
-                            <div>
+                            {/* Risk Score */}
+                            <div className="border-b border-slate-100 pb-5 md:border-b-0 md:border-r md:pb-0 md:pr-6">
 
-                                <p className="text-xs uppercase tracking-wider text-slate-400">
+                                <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
                                     Risk Score
                                 </p>
 
-                                <p className="mt-2 text-xl font-semibold text-slate-900">
-                                    {Number(
-                                        risk.riskScore ?? 0
-                                    ).toFixed(2)}
+                                <p className="mt-3 text-2xl font-semibold tracking-tight text-slate-900">
+                                    {riskScore.toFixed(2)}
+                                </p>
+
+                                <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+
+                                    <div
+                                        className="h-full rounded-full bg-indigo-500"
+                                        style={{
+                                            width: `${Math.min(
+                                                riskScore * 100,
+                                                100
+                                            )}%`,
+                                        }}
+                                    />
+
+                                </div>
+
+                                <p className="mt-2 text-xs text-slate-400">
+                                    Revenue recovery risk level
                                 </p>
 
                             </div>
 
+                            {/* Reason */}
                             <div>
 
-                                <p className="text-xs uppercase tracking-wider text-slate-400">
+                                <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
                                     Failure Reason
                                 </p>
 
-                                <p className="mt-2 text-sm font-medium text-slate-900">
-                                    {risk.reason?.replaceAll(
-                                        "_",
-                                        " "
+                                <p className="mt-3 text-base font-semibold text-slate-900">
+                                    {readableStatus(
+                                        risk.reason
                                     )}
+                                </p>
+
+                                <p className="mt-2 text-xs leading-5 text-slate-400">
+                                    Detected payment or billing failure
                                 </p>
 
                             </div>
@@ -315,14 +373,15 @@ export default function RiskDetails() {
 
                     </div>
 
+                    {/* Gemini Analysis */}
                     <div className="overflow-hidden rounded-2xl border border-indigo-100 bg-white shadow-sm">
 
-                        <div className="flex items-center justify-between border-b border-indigo-100 bg-gradient-to-r from-indigo-50 to-white px-6 py-5">
+                        <div className="flex flex-col gap-4 border-b border-indigo-100 bg-gradient-to-r from-indigo-50 via-violet-50 to-white px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
 
                             <div className="flex items-center gap-3">
 
-                                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500 text-white">
-                                    <Sparkles size={18} />
+                                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm">
+                                    <Sparkles size={19} />
                                 </div>
 
                                 <div>
@@ -344,7 +403,7 @@ export default function RiskDetails() {
                                     handleAnalyze
                                 }
                                 disabled={analyzing}
-                                className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50"
+                                className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 {analyzing
                                     ? "Analyzing..."
@@ -357,19 +416,23 @@ export default function RiskDetails() {
 
                             {!analysis ? (
 
-                                <div className="py-8 text-center">
+                                <div className="py-10 text-center">
 
-                                    <Brain
-                                        size={32}
-                                        className="mx-auto text-slate-300"
-                                    />
+                                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50">
 
-                                    <p className="mt-3 text-sm font-medium text-slate-600">
+                                        <Brain
+                                            size={30}
+                                            className="text-indigo-300"
+                                        />
+
+                                    </div>
+
+                                    <p className="mt-4 text-sm font-semibold text-slate-700">
                                         No analysis generated yet
                                     </p>
 
-                                    <p className="mt-1 text-sm text-slate-400">
-                                        Run Gemini analysis to determine the best recovery intervention.
+                                    <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-400">
+                                        Run Gemini analysis to determine the most appropriate recovery intervention for this case.
                                     </p>
 
                                 </div>
@@ -378,9 +441,10 @@ export default function RiskDetails() {
 
                                 <div className="space-y-6">
 
+                                    {/* Diagnosis */}
                                     <div>
 
-                                        <p className="text-xs uppercase tracking-wider text-slate-400">
+                                        <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
                                             Diagnosis
                                         </p>
 
@@ -390,31 +454,33 @@ export default function RiskDetails() {
 
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-5">
+                                    {/* Recommendation */}
+                                    <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
 
-                                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                        <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-4">
 
-                                            <p className="text-xs uppercase tracking-wider text-slate-400">
+                                            <p className="text-xs font-medium uppercase tracking-wider text-indigo-400">
                                                 Recommended Action
                                             </p>
 
                                             <p className="mt-2 font-semibold text-indigo-700">
-                                                {analysis.recommendedAction}
+                                                {readableStatus(
+                                                    analysis.recommendedAction
+                                                )}
                                             </p>
 
                                         </div>
 
                                         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
 
-                                            <p className="text-xs uppercase tracking-wider text-slate-400">
+                                            <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
                                                 Confidence
                                             </p>
 
                                             <p className="mt-2 font-semibold text-slate-900">
                                                 {(
                                                     Number(
-                                                        analysis.confidence ??
-                                                        0
+                                                        analysis.confidence ?? 0
                                                     ) * 100
                                                 ).toFixed(0)}
                                                 %
@@ -427,8 +493,7 @@ export default function RiskDetails() {
                                                     style={{
                                                         width: `${Math.min(
                                                             Number(
-                                                                analysis.confidence ??
-                                                                0
+                                                                analysis.confidence ?? 0
                                                             ) * 100,
                                                             100
                                                         )}%`,
@@ -441,9 +506,10 @@ export default function RiskDetails() {
 
                                     </div>
 
+                                    {/* Reasoning */}
                                     <div>
 
-                                        <p className="text-xs uppercase tracking-wider text-slate-400">
+                                        <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
                                             Reasoning
                                         </p>
 
@@ -461,14 +527,19 @@ export default function RiskDetails() {
 
                     </div>
 
+                    {/* Policy Guardrails */}
                     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
 
                         <div className="mb-5 flex items-center gap-3">
 
-                            <ShieldCheck
-                                className="text-emerald-600"
-                                size={20}
-                            />
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50">
+
+                                <ShieldCheck
+                                    className="text-emerald-600"
+                                    size={20}
+                                />
+
+                            </div>
 
                             <div>
 
@@ -477,62 +548,77 @@ export default function RiskDetails() {
                                 </h2>
 
                                 <p className="text-sm text-slate-500">
-                                    Deterministic safety layer
+                                    Deterministic safety layer for AI recovery decisions
                                 </p>
 
                             </div>
 
                         </div>
 
-                        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
 
-                            <div className="rounded-xl bg-emerald-50 p-4">
+                            {/* Retry Limits */}
+                            <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-4">
 
                                 <CheckCircle2
-                                    size={18}
+                                    size={19}
                                     className="text-emerald-600"
                                 />
 
-                                <p className="mt-3 text-xs text-emerald-700">
+                                <p className="mt-3 text-xs font-medium text-emerald-700">
                                     Retry Limits
                                 </p>
 
-                                <p className="mt-1 text-sm font-semibold text-emerald-900">
+                                <p className="mt-1 text-sm font-semibold text-emerald-950">
                                     Enforced
                                 </p>
 
+                                <p className="mt-2 text-xs leading-5 text-emerald-700/70">
+                                    Maximum recovery attempts are strictly controlled.
+                                </p>
+
                             </div>
 
-                            <div className="rounded-xl bg-emerald-50 p-4">
+                            {/* Fraud */}
+                            <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-4">
 
                                 <ShieldCheck
-                                    size={18}
+                                    size={19}
                                     className="text-emerald-600"
                                 />
 
-                                <p className="mt-3 text-xs text-emerald-700">
+                                <p className="mt-3 text-xs font-medium text-emerald-700">
                                     Fraud Protection
                                 </p>
 
-                                <p className="mt-1 text-sm font-semibold text-emerald-900">
+                                <p className="mt-1 text-sm font-semibold text-emerald-950">
                                     Active
+                                </p>
+
+                                <p className="mt-2 text-xs leading-5 text-emerald-700/70">
+                                    Suspicious cases are blocked or escalated to review.
                                 </p>
 
                             </div>
 
-                            <div className="rounded-xl bg-emerald-50 p-4">
+                            {/* Stop Rules */}
+                            <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-4">
 
                                 <Clock3
-                                    size={18}
+                                    size={19}
                                     className="text-emerald-600"
                                 />
 
-                                <p className="mt-3 text-xs text-emerald-700">
+                                <p className="mt-3 text-xs font-medium text-emerald-700">
                                     Stopping Rules
                                 </p>
 
-                                <p className="mt-1 text-sm font-semibold text-emerald-900">
+                                <p className="mt-1 text-sm font-semibold text-emerald-950">
                                     Active
+                                </p>
+
+                                <p className="mt-2 text-xs leading-5 text-emerald-700/70">
+                                    Recovered, stopped, and lost cases cannot continue.
                                 </p>
 
                             </div>
@@ -543,66 +629,233 @@ export default function RiskDetails() {
 
                 </div>
 
+                {/* Right column */}
                 <div className="space-y-6">
 
-                    <div className="rounded-2xl bg-[#111827] p-6 text-white shadow-sm">
+                    {/* Recovery Workflow */}
+                    <div className="overflow-hidden rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50 via-white to-violet-50 shadow-sm">
 
-                        <p className="text-sm text-slate-400">
-                            Recovery Workflow
-                        </p>
+                        {/* Header */}
+                        <div className="border-b border-indigo-100 px-6 py-5">
 
-                        <h2 className="mt-1 text-xl font-semibold">
-                            Run Recovery
-                        </h2>
+                            <div className="flex items-center gap-3">
 
-                        <p className="mt-3 text-sm leading-6 text-slate-400">
-                            Gemini recommends an intervention. The policy engine validates it before execution.
-                        </p>
+                                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm">
+                                    <Sparkles size={20} />
+                                </div>
 
-                        <button>
-                            onClick={() =>
-                            setRecoveryModalOpen(true)
-                        }
-                            disabled={
-                                running ||
-                                risk.status ===
-                                "RECOVERED"
-                            }
-                            className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 py-3 text-sm font-medium text-white transition hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-50"
+                                <div>
 
-                            <Play size={16} />
+                                    <p className="text-xs font-semibold uppercase tracking-wider text-indigo-500">
+                                        Recovery Workflow
+                                    </p>
 
-                            {running
-                                ? "Running..."
-                                : "Run Recovery Workflow"}
-                        </button>
+                                    <h2 className="mt-1 text-xl font-semibold text-slate-900">
+                                        Run Recovery
+                                    </h2>
 
-                        {workflowResult && (
+                                </div>
 
-                            <div className="mt-5 rounded-xl border border-white/10 bg-white/5 p-4">
+                            </div>
 
-                                <p className="text-xs uppercase tracking-wider text-slate-500">
-                                    Result
-                                </p>
+                            <p className="mt-4 text-sm leading-6 text-slate-600">
+                                Gemini recommends an intervention, then the policy engine validates it before anything is executed.
+                            </p>
 
-                                <p className="mt-2 font-semibold">
-                                    {
-                                        workflowResult.workflowStatus
-                                    }
-                                </p>
+                        </div>
 
-                                <p className="mt-2 text-sm leading-5 text-slate-400">
-                                    {
-                                        workflowResult.message
-                                    }
+                        {/* Steps */}
+                        <div className="px-6 py-5">
+
+                            <div className="space-y-1">
+
+                                {/* 1 */}
+                                <div className="flex gap-4 rounded-xl p-3 transition hover:bg-white/70">
+
+                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-sm font-bold text-indigo-700">
+                                        1
+                                    </div>
+
+                                    <div>
+
+                                        <p className="text-sm font-semibold text-slate-900">
+                                            AI Recommendation
+                                        </p>
+
+                                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                                            Gemini analyzes the risk and recommends the best recovery action.
+                                        </p>
+
+                                    </div>
+
+                                </div>
+
+                                <div className="ml-[27px] h-3 w-px bg-indigo-200" />
+
+                                {/* 2 */}
+                                <div className="flex gap-4 rounded-xl p-3 transition hover:bg-white/70">
+
+                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-sm font-bold text-indigo-700">
+                                        2
+                                    </div>
+
+                                    <div>
+
+                                        <p className="text-sm font-semibold text-slate-900">
+                                            Policy Validation
+                                        </p>
+
+                                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                                            Guardrails check confidence, fraud, attempt limits and high-value cases.
+                                        </p>
+
+                                    </div>
+
+                                </div>
+
+                                <div className="ml-[27px] h-3 w-px bg-indigo-200" />
+
+                                {/* 3 */}
+                                <div className="flex gap-4 rounded-xl p-3 transition hover:bg-white/70">
+
+                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-sm font-bold text-indigo-700">
+                                        3
+                                    </div>
+
+                                    <div>
+
+                                        <p className="text-sm font-semibold text-slate-900">
+                                            Recovery Execution
+                                        </p>
+
+                                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                                            Approved actions are executed. Sensitive cases are sent for human review.
+                                        </p>
+
+                                    </div>
+
+                                </div>
+
+                                <div className="ml-[27px] h-3 w-px bg-indigo-200" />
+
+                                {/* 4 */}
+                                <div className="flex gap-4 rounded-xl p-3 transition hover:bg-white/70">
+
+                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-sm font-bold text-indigo-700">
+                                        4
+                                    </div>
+
+                                    <div>
+
+                                        <p className="text-sm font-semibold text-slate-900">
+                                            Outcome Tracking
+                                        </p>
+
+                                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                                            The result is recorded and revenue analytics are updated.
+                                        </p>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                            {/* Workflow result */}
+                            {workflowResult && (
+
+                                <div
+                                    className={`mt-5 rounded-xl border p-4 ${
+                                        workflowResult.workflowStatus === "RECOVERED"
+                                            ? "border-emerald-200 bg-emerald-50"
+                                            : workflowResult.workflowStatus === "FAILED"
+                                                ? "border-red-200 bg-red-50"
+                                                : workflowResult.workflowStatus === "HUMAN_REVIEW"
+                                                    ? "border-amber-200 bg-amber-50"
+                                                    : "border-slate-200 bg-slate-50"
+                                    }`}
+                                >
+
+                                    <div className="flex items-center gap-2">
+
+                                        <CheckCircle2
+                                            size={17}
+                                            className={
+                                                workflowResult.workflowStatus === "RECOVERED"
+                                                    ? "text-emerald-600"
+                                                    : workflowResult.workflowStatus === "FAILED"
+                                                        ? "text-red-600"
+                                                        : workflowResult.workflowStatus === "HUMAN_REVIEW"
+                                                            ? "text-amber-600"
+                                                            : "text-slate-500"
+                                            }
+                                        />
+
+                                        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                            Workflow Result
+                                        </p>
+
+                                    </div>
+
+                                    <p className="mt-2 font-semibold text-slate-900">
+                                        {readableStatus(
+                                            workflowResult.workflowStatus
+                                        )}
+                                    </p>
+
+                                    <p className="mt-1 text-sm leading-6 text-slate-600">
+                                        {workflowResult.message}
+                                    </p>
+
+                                </div>
+
+                            )}
+
+                            {/* Button */}
+                            <button
+                                onClick={() =>
+                                    setRecoveryModalOpen(true)
+                                }
+                                disabled={
+                                    running ||
+                                    isTerminal
+                                }
+                                className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
+                            >
+
+                                <Play size={17} />
+
+                                {running
+                                    ? "Running Recovery..."
+                                    : risk.status === "RECOVERED"
+                                        ? "Revenue Already Recovered"
+                                        : risk.status === "STOPPED"
+                                            ? "Recovery Stopped"
+                                            : risk.status === "LOST"
+                                                ? "Revenue Marked Lost"
+                                                : "Run Recovery Workflow"}
+
+                            </button>
+
+                            {/* Safety note */}
+                            <div className="mt-3 flex items-start gap-2">
+
+                                <ShieldCheck
+                                    size={14}
+                                    className="mt-0.5 shrink-0 text-emerald-600"
+                                />
+
+                                <p className="text-xs leading-5 text-slate-500">
+                                    Every AI recommendation is checked by deterministic policy rules before execution.
                                 </p>
 
                             </div>
 
-                        )}
+                        </div>
 
                     </div>
 
+                    {/* Audit Timeline */}
                     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
 
                         <h2 className="font-semibold text-slate-900">
@@ -617,9 +870,11 @@ export default function RiskDetails() {
 
                             {auditLogs.length === 0 && (
 
-                                <p className="text-sm text-slate-400">
-                                    No audit events yet.
-                                </p>
+                                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center">
+
+                                    <ScrollEmptyState />
+
+                                </div>
 
                             )}
 
@@ -634,7 +889,9 @@ export default function RiskDetails() {
                                         {index !==
                                             auditLogs.length -
                                             1 && (
+
                                                 <div className="absolute left-[7px] top-5 h-full w-px bg-slate-200" />
+
                                             )}
 
                                         <div className="relative mt-1 h-4 w-4 shrink-0 rounded-full border-4 border-white bg-indigo-500 ring-1 ring-slate-200" />
@@ -642,9 +899,8 @@ export default function RiskDetails() {
                                         <div className="pb-3">
 
                                             <p className="text-sm font-medium text-slate-700">
-                                                {log.eventType?.replaceAll(
-                                                    "_",
-                                                    " "
+                                                {readableStatus(
+                                                    log.eventType
                                                 )}
                                             </p>
 
@@ -667,6 +923,7 @@ export default function RiskDetails() {
 
             </div>
 
+            {/* Confirm Modal */}
             <ConfirmModal
                 open={recoveryModalOpen}
                 title="Run recovery workflow?"
@@ -677,11 +934,34 @@ export default function RiskDetails() {
                     setRecoveryModalOpen(false)
                 }
                 onConfirm={async () => {
+
                     await handleRecovery();
-                    setRecoveryModalOpen(false);
+
+                    setRecoveryModalOpen(
+                        false
+                    );
                 }}
             />
 
         </div>
+    );
+}
+
+function ScrollEmptyState() {
+
+    return (
+        <>
+            <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-300 shadow-sm">
+                <Clock3 size={18} />
+            </div>
+
+            <p className="mt-3 text-sm font-medium text-slate-600">
+                No audit events yet
+            </p>
+
+            <p className="mt-1 text-xs leading-5 text-slate-400">
+                Decisions, actions, and recovery outcomes will appear here.
+            </p>
+        </>
     );
 }

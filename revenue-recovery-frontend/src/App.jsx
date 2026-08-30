@@ -11,48 +11,65 @@ import RiskDetails from "./pages/RiskDetails";
 import RecoveryCenter from "./pages/RecoveryCenter";
 import HumanReview from "./pages/HumanReview";
 import AuditLogs from "./pages/AuditLogs";
+import Login from "./pages/Login";
 
-const router = createBrowserRouter([
-  {
-    path: "/",
-    element: <DashboardLayout />,
+import ProtectedRoute from "./components/ProtectedRoute";
 
-    children: [
+const router =
+    createBrowserRouter([
       {
-        index: true,
-        element: <Dashboard />,
+        path: "/login",
+        element: <Login />,
       },
 
       {
-        path: "risks",
-        element: <RevenueRisks />,
-      },
+        path: "/",
 
-      {
-        path: "risks/:id",
-        element: <RiskDetails />,
-      },
+        element: (
+            <ProtectedRoute>
+              <DashboardLayout />
+            </ProtectedRoute>
+        ),
 
-      {
-        path: "recovery",
-        element: <RecoveryCenter />,
-      },
+        children: [
+          {
+            index: true,
+            element: <Dashboard />,
+          },
 
-      {
-        path: "human-review",
-        element: <HumanReview />,
-      },
+          {
+            path: "risks",
+            element: <RevenueRisks />,
+          },
 
-      {
-        path: "audit",
-        element: <AuditLogs />,
+          {
+            path: "risks/:id",
+            element: <RiskDetails />,
+          },
+
+          {
+            path: "recovery",
+            element: <RecoveryCenter />,
+          },
+
+          {
+            path: "human-review",
+            element: <HumanReview />,
+          },
+
+          {
+            path: "audit",
+            element: <AuditLogs />,
+          },
+        ],
       },
-    ],
-  },
-]);
+    ]);
 
 export default function App() {
+
   return (
-      <RouterProvider router={router} />
+      <RouterProvider
+          router={router}
+      />
   );
 }
