@@ -4,6 +4,9 @@
 
 RevenueAI is a full-stack platform for managing revenue at risk from failed subscription payments. It analyzes payment failures, recommends recovery actions, validates them against business rules, and tracks the final recovery outcome.
 
+
+
+
 The main idea is simple: **AI can recommend an action, but it does not get unrestricted execution authority.**
 
 ---
@@ -225,6 +228,12 @@ Approve / Reject
 All important decisions and recovery outcomes are recorded in the audit log.
 
 ---
+## Login Details
+
+```text
+-username:- admin2@revenueai.com
+- password:- Admin@123
+```
 
 ## Dashboard
 
