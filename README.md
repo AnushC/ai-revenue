@@ -250,16 +250,17 @@ This makes it possible to measure the result of the recovery workflow instead of
 
 ### Screenshots
 
-Below are screenshots from the app UI. To display them in the README, add the two image files to the repository at `assets/screenshots/overview.png` and `assets/screenshots/audit-log.png` (paths are case-sensitive).
+Below are screenshots from the app UI. 
 
-![Recovery Overview](assets/screenshots/overview.png)
 
 _Figure: Recovery Overview — shows revenue at risk, recovered revenue, recovery rate and the Gemini agent panel._
 
 
-![Audit Log](assets/screenshots/audit-log.png)
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/24a0d446-8263-4aee-99bb-7ba6190398e8" />
+
 
 _Figure: Audit Log — shows AI decisions, policy actions, fallbacks, and recovery outcomes._
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/ca3ece58-6bee-437b-a6fd-ae157964bf11" />
 
 ---
 
