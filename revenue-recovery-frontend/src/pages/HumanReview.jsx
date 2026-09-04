@@ -7,6 +7,7 @@ import {
     UserCheck,
     IndianRupee,
     ExternalLink,
+    RefreshCw,
 } from "lucide-react";
 
 import { Link } from "react-router-dom";
@@ -23,20 +24,47 @@ import ConfirmModal from "../components/ConfirmModal";
 export default function HumanReview() {
     const [reviews, setReviews] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [processingId, setProcessingId] = useState(null);
+    const [refreshing, setRefreshing] = useState(false);
 
+    const [processingId, setProcessingId] = useState(null);
     const [selectedReview, setSelectedReview] = useState(null);
     const [decision, setDecision] = useState(null);
 
-    async function loadReviews() {
+    async function loadReviews(showRefreshIndicator = false) {
+        if (showRefreshIndicator) {
+            setRefreshing(true);
+        }
+
         try {
             const response = await getHumanReviews();
-            setReviews(response.data);
+
+            setReviews(
+                Array.isArray(response.data)
+                    ? response.data
+                    : []
+            );
         } catch (error) {
-            console.error(error);
-            toast.error("Unable to load human review queue");
+            console.error(
+                "Unable to load human review queue:",
+                error
+            );
+
+            console.error(
+                "Backend response:",
+                error.response?.data
+            );
+
+            const backendMessage =
+                error.response?.data?.message ||
+                error.response?.data?.error;
+
+            toast.error(
+                backendMessage ||
+                "Unable to load human review queue"
+            );
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
     }
 
@@ -49,31 +77,118 @@ export default function HumanReview() {
             return;
         }
 
-        setProcessingId(selectedReview.id);
+        const riskId = selectedReview.id;
+
+        setProcessingId(riskId);
 
         try {
             if (decision === "APPROVE") {
-                await approveHumanReview(selectedReview.id);
-                toast.success(`Risk #${selectedReview.id} approved`);
-            } else {
-                await rejectHumanReview(selectedReview.id);
-                toast.success(`Risk #${selectedReview.id} rejected`);
-            }
+                const response =
+                    await approveHumanReview(riskId);
 
-            await loadReviews();
+                const updatedRisk =
+                    response.data;
+
+                showApprovalResult(
+                    riskId,
+                    updatedRisk
+                );
+            } else {
+                const response =
+                    await rejectHumanReview(riskId);
+
+                const updatedRisk =
+                    response.data;
+
+                const status =
+                    updatedRisk?.status || "STOPPED";
+
+                toast.success(
+                    `Risk #${riskId} rejected — ${formatText(
+                        status
+                    )}`
+                );
+            }
 
             setSelectedReview(null);
             setDecision(null);
+
+            await loadReviews();
+
         } catch (error) {
-            console.error(error);
-            toast.error("Unable to process review");
+            console.error(
+                "Human review error:",
+                error
+            );
+
+            console.error(
+                "Backend response:",
+                error.response?.data
+            );
+
+            const backendMessage =
+                error.response?.data?.message ||
+                error.response?.data?.error;
+
+            toast.error(
+                backendMessage ||
+                `Unable to process review (${
+                    error.response?.status ||
+                    "unknown error"
+                })`
+            );
         } finally {
             setProcessingId(null);
         }
     }
 
+    function showApprovalResult(
+        riskId,
+        updatedRisk
+    ) {
+        const status =
+            updatedRisk?.status;
+
+        if (status === "RECOVERED") {
+            toast.success(
+                `Risk #${riskId} approved and revenue recovered`
+            );
+
+            return;
+        }
+
+        if (status === "STOPPED") {
+            toast.success(
+                `Risk #${riskId} reviewed and recovery stopped`
+            );
+
+            return;
+        }
+
+        if (status === "OPEN") {
+            toast(
+                `Risk #${riskId} approved, but recovery attempt failed`
+            );
+
+            return;
+        }
+
+        if (status === "IN_RECOVERY") {
+            toast.success(
+                `Risk #${riskId} approved for recovery`
+            );
+
+            return;
+        }
+
+        toast.success(
+            `Risk #${riskId} approved`
+        );
+    }
+
     const totalRevenue = reviews.reduce(
-        (sum, risk) => sum + Number(risk.amountAtRisk || 0),
+        (sum, risk) =>
+            sum + Number(risk.amountAtRisk || 0),
         0
     );
 
@@ -92,24 +207,51 @@ export default function HumanReview() {
 
             {/* HEADER */}
 
-            <div>
-                <p className="text-sm font-medium text-indigo-600">
-                    Human-in-the-loop
-                </p>
+            <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
 
-                <h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-900">
-                    Human Review
-                </h1>
+                <div>
+                    <p className="text-sm font-medium text-indigo-600">
+                        Human-in-the-loop
+                    </p>
 
-                <p className="mt-2 text-sm text-slate-500">
-                    Review cases where automated recovery has been
-                    paused by policy controls.
-                </p>
+                    <h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-900">
+                        Human Review
+                    </h1>
+
+                    <p className="mt-2 text-sm text-slate-500">
+                        Review cases where automated recovery has
+                        been paused by policy controls.
+                    </p>
+                </div>
+
+                <button
+                    type="button"
+                    disabled={refreshing}
+                    onClick={() =>
+                        loadReviews(true)
+                    }
+                    className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                    <RefreshCw
+                        size={16}
+                        className={
+                            refreshing
+                                ? "animate-spin"
+                                : ""
+                        }
+                    />
+
+                    {refreshing
+                        ? "Refreshing..."
+                        : "Refresh"}
+                </button>
+
             </div>
 
             {/* POLICY BANNER */}
 
             <div className="flex items-start gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+
                 <div className="rounded-xl bg-amber-100 p-2.5 text-amber-700">
                     <ShieldCheck size={20} />
                 </div>
@@ -124,6 +266,7 @@ export default function HumanReview() {
                         automated recovery can continue.
                     </p>
                 </div>
+
             </div>
 
             {/* SUMMARY */}
@@ -139,7 +282,9 @@ export default function HumanReview() {
                 <SummaryCard
                     icon={<IndianRupee size={19} />}
                     title="Revenue Awaiting Decision"
-                    value={`₹${totalRevenue.toLocaleString("en-IN")}`}
+                    value={`₹${totalRevenue.toLocaleString(
+                        "en-IN"
+                    )}`}
                 />
 
                 <SummaryCard
@@ -150,22 +295,26 @@ export default function HumanReview() {
 
             </div>
 
-            {/* QUEUE */}
+            {/* REVIEW QUEUE */}
 
             <div className="rounded-2xl border border-slate-200 bg-white">
 
                 <div className="border-b border-slate-100 px-6 py-5">
+
                     <h2 className="font-semibold text-slate-900">
                         Review Queue
                     </h2>
 
                     <p className="mt-1 text-sm text-slate-500">
-                        {reviews.length} case{reviews.length !== 1 ? "s" : ""} waiting
-                        for a reviewer.
+                        {reviews.length} case
+                        {reviews.length !== 1 ? "s" : ""}
+                        {" "}waiting for a reviewer.
                     </p>
+
                 </div>
 
                 {reviews.length === 0 ? (
+
                     <div className="px-6 py-16 text-center">
 
                         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
@@ -182,10 +331,13 @@ export default function HumanReview() {
                         </p>
 
                     </div>
+
                 ) : (
+
                     <div className="divide-y divide-slate-100">
 
                         {reviews.map((risk) => (
+
                             <div
                                 key={risk.id}
                                 className="p-6 transition hover:bg-slate-50/60"
@@ -197,17 +349,19 @@ export default function HumanReview() {
 
                                         <div className="flex flex-wrap items-center gap-3">
 
-                      <span className="text-sm font-semibold text-slate-900">
-                        Risk #{risk.id}
-                      </span>
+                                            <span className="text-sm font-semibold text-slate-900">
+                                                Risk #{risk.id}
+                                            </span>
 
                                             <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600">
-                        HUMAN REVIEW
-                      </span>
+                                                HUMAN REVIEW
+                                            </span>
 
                                             <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
-                        {risk.failureReason || "UNKNOWN"}
-                      </span>
+                                                {formatText(
+                                                    risk.reason || "UNKNOWN"
+                                                )}
+                                            </span>
 
                                         </div>
 
@@ -217,7 +371,9 @@ export default function HumanReview() {
                                                 label="Revenue at Risk"
                                                 value={`₹${Number(
                                                     risk.amountAtRisk || 0
-                                                ).toLocaleString("en-IN")}`}
+                                                ).toLocaleString(
+                                                    "en-IN"
+                                                )}`}
                                             />
 
                                             <RiskInfo
@@ -225,7 +381,9 @@ export default function HumanReview() {
                                                 value={
                                                     risk.riskScore != null
                                                         ? `${Math.round(
-                                                            Number(risk.riskScore) * 100
+                                                            Number(
+                                                                risk.riskScore
+                                                            ) * 100
                                                         )}%`
                                                         : "—"
                                                 }
@@ -233,12 +391,17 @@ export default function HumanReview() {
 
                                             <RiskInfo
                                                 label="Status"
-                                                value={risk.status || "—"}
+                                                value={formatText(
+                                                    risk.status || "—"
+                                                )}
                                             />
 
                                             <RiskInfo
                                                 label="Review Status"
-                                                value={risk.reviewStatus || "PENDING"}
+                                                value={formatText(
+                                                    risk.reviewStatus ||
+                                                    "PENDING"
+                                                )}
                                             />
 
                                         </div>
@@ -251,15 +414,17 @@ export default function HumanReview() {
                                             />
 
                                             <div>
+
                                                 <p className="text-sm font-medium text-slate-800">
                                                     Why human review?
                                                 </p>
 
                                                 <p className="mt-1 text-sm leading-6 text-slate-500">
-                                                    Automated recovery was paused because this
-                                                    case requires manual authorization under the
-                                                    recovery policy.
+                                                    {getReviewReason(
+                                                        risk
+                                                    )}
                                                 </p>
+
                                             </div>
 
                                         </div>
@@ -279,24 +444,44 @@ export default function HumanReview() {
                                         </Link>
 
                                         <button
+                                            type="button"
+                                            disabled={
+                                                processingId !== null
+                                            }
                                             onClick={() => {
-                                                setSelectedReview(risk);
-                                                setDecision("APPROVE");
+                                                setSelectedReview(
+                                                    risk
+                                                );
+
+                                                setDecision(
+                                                    "APPROVE"
+                                                );
                                             }}
-                                            className="flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-emerald-700"
+                                            className="flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
                                         >
                                             <CheckCircle2 size={16} />
+
                                             Approve
                                         </button>
 
                                         <button
+                                            type="button"
+                                            disabled={
+                                                processingId !== null
+                                            }
                                             onClick={() => {
-                                                setSelectedReview(risk);
-                                                setDecision("REJECT");
+                                                setSelectedReview(
+                                                    risk
+                                                );
+
+                                                setDecision(
+                                                    "REJECT"
+                                                );
                                             }}
-                                            className="flex items-center justify-center gap-2 rounded-xl border border-red-200 px-4 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-50"
+                                            className="flex items-center justify-center gap-2 rounded-xl border border-red-200 px-4 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
                                         >
                                             <XCircle size={16} />
+
                                             Reject
                                         </button>
 
@@ -305,12 +490,16 @@ export default function HumanReview() {
                                 </div>
 
                             </div>
+
                         ))}
 
                     </div>
+
                 )}
 
             </div>
+
+            {/* CONFIRM MODAL */}
 
             <ConfirmModal
                 open={Boolean(selectedReview)}
@@ -321,17 +510,25 @@ export default function HumanReview() {
                 }
                 description={
                     decision === "APPROVE"
-                        ? `Risk #${selectedReview?.id} will be approved for recovery processing.`
-                        : `Risk #${selectedReview?.id} will be rejected and automated recovery will remain stopped.`
+                        ? `Risk #${selectedReview?.id} will be approved and the authorized recovery action will continue.`
+                        : `Risk #${selectedReview?.id} will be rejected and automated recovery will be stopped.`
                 }
                 confirmText={
                     decision === "APPROVE"
                         ? "Approve"
                         : "Reject"
                 }
-                danger={decision === "REJECT"}
-                loading={processingId !== null}
+                danger={
+                    decision === "REJECT"
+                }
+                loading={
+                    processingId !== null
+                }
                 onCancel={() => {
+                    if (processingId !== null) {
+                        return;
+                    }
+
                     setSelectedReview(null);
                     setDecision(null);
                 }}
@@ -342,9 +539,14 @@ export default function HumanReview() {
     );
 }
 
-function SummaryCard({ icon, title, value }) {
+function SummaryCard({
+                         icon,
+                         title,
+                         value,
+                     }) {
     return (
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
+
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
                 {icon}
             </div>
@@ -356,13 +558,18 @@ function SummaryCard({ icon, title, value }) {
             <p className="mt-1 text-2xl font-semibold text-slate-900">
                 {value}
             </p>
+
         </div>
     );
 }
 
-function RiskInfo({ label, value }) {
+function RiskInfo({
+                      label,
+                      value,
+                  }) {
     return (
         <div>
+
             <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
                 {label}
             </p>
@@ -370,6 +577,64 @@ function RiskInfo({ label, value }) {
             <p className="mt-1 text-sm font-medium text-slate-800">
                 {value}
             </p>
+
         </div>
     );
+}
+
+function formatText(value) {
+    if (!value) {
+        return "—";
+    }
+
+    return String(value)
+        .replaceAll("_", " ");
+}
+
+function getReviewReason(risk) {
+    switch (risk?.reason) {
+
+        case "FRAUD_SUSPECTED":
+            return (
+                "Possible fraud was detected. Automated recovery "
+                + "was paused so a human reviewer can evaluate "
+                + "the case before any further action."
+            );
+
+        case "UNKNOWN":
+            return (
+                "The payment failure reason could not be determined "
+                + "with enough certainty, so manual authorization is required."
+            );
+
+        case "BANK_DECLINED":
+            return (
+                "The payment was declined by the customer's bank. "
+                + "Manual authorization is required before recovery continues."
+            );
+
+        case "EXPIRED_CARD":
+            return (
+                "The saved payment method may have expired. "
+                + "A reviewer can authorize a safer recovery action."
+            );
+
+        case "INSUFFICIENT_FUNDS":
+            return (
+                "The payment may have failed because insufficient funds "
+                + "were available. Human review can authorize a delayed retry."
+            );
+
+        case "AUTHENTICATION_REQUIRED":
+            return (
+                "Additional customer authentication is required "
+                + "before the payment can be attempted again."
+            );
+
+        default:
+            return (
+                "Automated recovery was paused because this case "
+                + "requires manual authorization under the recovery policy."
+            );
+    }
 }

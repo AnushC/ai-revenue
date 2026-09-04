@@ -10,6 +10,7 @@ import org.example.app.repository.RevenueRiskRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Random;
 
@@ -29,18 +30,10 @@ public class HumanReviewService {
             RecoveryExecutionService recoveryExecutionService,
             AuditLogRepository auditLogRepository
     ) {
-
-        this.revenueRiskRepository =
-                revenueRiskRepository;
-
-        this.recoveryActionRepository =
-                recoveryActionRepository;
-
-        this.recoveryExecutionService =
-                recoveryExecutionService;
-
-        this.auditLogRepository =
-                auditLogRepository;
+        this.revenueRiskRepository = revenueRiskRepository;
+        this.recoveryActionRepository = recoveryActionRepository;
+        this.recoveryExecutionService = recoveryExecutionService;
+        this.auditLogRepository = auditLogRepository;
     }
 
     /*
@@ -50,11 +43,9 @@ public class HumanReviewService {
      */
 
     public List<RevenueRisk> getPendingReviews() {
-
-        return revenueRiskRepository
-                .findByReviewStatus(
-                        RevenueRisk.ReviewStatus.PENDING
-                );
+        return revenueRiskRepository.findByReviewStatus(
+                RevenueRisk.ReviewStatus.PENDING
+        );
     }
 
     /*
@@ -64,35 +55,26 @@ public class HumanReviewService {
      */
 
     @Transactional
-    public RevenueRisk sendToReview(
-            Long riskId
-    ) {
+    public RevenueRisk sendToReview(Long riskId) {
 
-        RevenueRisk risk =
-                findRisk(riskId);
+        RevenueRisk risk = findRisk(riskId);
 
         /*
          * Finished cases cannot be reopened.
          */
-        if (risk.getStatus()
-                == RevenueRisk.RiskStatus.RECOVERED) {
-
+        if (risk.getStatus() == RevenueRisk.RiskStatus.RECOVERED) {
             throw new IllegalStateException(
                     "Recovered revenue cannot be sent for human review."
             );
         }
 
-        if (risk.getStatus()
-                == RevenueRisk.RiskStatus.LOST) {
-
+        if (risk.getStatus() == RevenueRisk.RiskStatus.LOST) {
             throw new IllegalStateException(
                     "Lost revenue cannot be sent for human review."
             );
         }
 
-        if (risk.getStatus()
-                == RevenueRisk.RiskStatus.STOPPED) {
-
+        if (risk.getStatus() == RevenueRisk.RiskStatus.STOPPED) {
             throw new IllegalStateException(
                     "Stopped recovery cannot be sent for human review."
             );
@@ -101,9 +83,7 @@ public class HumanReviewService {
         /*
          * Prevent duplicate escalation.
          */
-        if (risk.getReviewStatus()
-                == RevenueRisk.ReviewStatus.PENDING) {
-
+        if (risk.getReviewStatus() == RevenueRisk.ReviewStatus.PENDING) {
             return risk;
         }
 
@@ -136,25 +116,23 @@ public class HumanReviewService {
      *      ↓
      * Read proposedActionType
      *      ↓
-     * Convert HUMAN_REVIEW into executable action
+     * If proposed action is HUMAN_REVIEW,
+     * choose a safe action based on failure reason
      *      ↓
      * Execute recovery
      *      ↓
-     * RECOVERED / FAILED
+     * RECOVERED / FAILED / STOPPED
      */
 
     @Transactional
-    public RevenueRisk approve(
-            Long riskId
-    ) {
+    public RevenueRisk approve(Long riskId) {
 
-        RevenueRisk risk =
-                findRisk(riskId);
+        RevenueRisk risk = findRisk(riskId);
 
         validatePendingReview(risk);
 
         /*
-         * Find the latest pending recovery action.
+         * Find latest pending recovery action.
          */
         RecoveryAction recoveryAction =
                 recoveryActionRepository
@@ -170,7 +148,7 @@ public class HumanReviewService {
                         );
 
         /*
-         * Make sure this really is a human-review action.
+         * Make sure this is actually waiting for human review.
          */
         if (recoveryAction.getActionType()
                 != RecoveryAction.ActionType.HUMAN_REVIEW) {
@@ -184,30 +162,46 @@ public class HumanReviewService {
                 recoveryAction.getProposedActionType();
 
         if (proposedAction == null) {
-
             throw new IllegalStateException(
                     "Human review action does not contain a proposed recovery action."
             );
         }
 
         /*
-         * HUMAN_REVIEW cannot recursively approve
-         * another HUMAN_REVIEW action.
+         * FIX:
          *
-         * This is especially important for UNKNOWN
-         * and FRAUD_SUSPECTED fallback cases.
+         * Some cases such as FRAUD_SUSPECTED or UNKNOWN may
+         * originally have HUMAN_REVIEW as the proposed action.
+         *
+         * Once a reviewer approves the case, convert that
+         * HUMAN_REVIEW decision into a safe deterministic action.
          */
         if (proposedAction
                 == RecoveryAction.ActionType.HUMAN_REVIEW) {
 
-            throw new IllegalStateException(
-                    "No executable recovery action was proposed. "
-                            + "Reviewer cannot automatically execute this case."
+            proposedAction =
+                    determineReviewerApprovedAction(risk);
+
+            recoveryAction.setProposedActionType(
+                    proposedAction
+            );
+
+            recoveryActionRepository.save(
+                    recoveryAction
+            );
+
+            createAuditLog(
+                    riskId,
+                    "HUMAN_REVIEW_ACTION_SELECTED",
+                    "Reviewer approval resolved HUMAN_REVIEW into action: "
+                            + proposedAction
             );
         }
 
         /*
          * STOP is handled separately.
+         *
+         * This is especially useful for suspected fraud.
          */
         if (proposedAction
                 == RecoveryAction.ActionType.STOP) {
@@ -224,12 +218,16 @@ public class HumanReviewService {
                     RecoveryAction.ActionType.STOP
             );
 
+            recoveryAction.setApproved(
+                    true
+            );
+
             recoveryAction.setStatus(
                     RecoveryAction.ActionStatus.EXECUTED
             );
 
             recoveryAction.setExecutedAt(
-                    java.time.LocalDateTime.now()
+                    LocalDateTime.now()
             );
 
             recoveryActionRepository.save(
@@ -242,7 +240,8 @@ public class HumanReviewService {
             createAuditLog(
                     riskId,
                     "HUMAN_REVIEW_APPROVED",
-                    "Human reviewer approved STOP action."
+                    "Human reviewer approved the case. "
+                            + "Recovery was stopped because the selected action was STOP."
             );
 
             return savedRisk;
@@ -250,7 +249,7 @@ public class HumanReviewService {
 
         /*
          * Human reviewer has authorized the
-         * originally proposed recovery action.
+         * executable recovery action.
          */
         risk.setReviewStatus(
                 RevenueRisk.ReviewStatus.APPROVED
@@ -292,8 +291,7 @@ public class HumanReviewService {
         );
 
         /*
-         * This project simulates whether recovery
-         * succeeds.
+         * Simulate whether recovery succeeds.
          */
         boolean successful =
                 simulateRecoverySuccess(
@@ -301,11 +299,10 @@ public class HumanReviewService {
                 );
 
         RecoveryOutcome outcome =
-                recoveryExecutionService
-                        .executeRecovery(
-                                recoveryAction.getId(),
-                                successful
-                        );
+                recoveryExecutionService.executeRecovery(
+                        recoveryAction.getId(),
+                        successful
+                );
 
         createAuditLog(
                 riskId,
@@ -318,8 +315,7 @@ public class HumanReviewService {
 
         /*
          * executeRecovery() updates RevenueRisk.
-         *
-         * Reload it so we return the latest state.
+         * Reload it so the latest state is returned.
          */
         return findRisk(riskId);
     }
@@ -331,17 +327,14 @@ public class HumanReviewService {
      */
 
     @Transactional
-    public RevenueRisk reject(
-            Long riskId
-    ) {
+    public RevenueRisk reject(Long riskId) {
 
-        RevenueRisk risk =
-                findRisk(riskId);
+        RevenueRisk risk = findRisk(riskId);
 
         validatePendingReview(risk);
 
         /*
-         * Find the pending action if one exists.
+         * Find pending action if one exists.
          */
         recoveryActionRepository
                 .findFirstByRevenueRiskIdAndStatusOrderByCreatedAtDesc(
@@ -382,6 +375,56 @@ public class HumanReviewService {
         );
 
         return savedRisk;
+    }
+
+    /*
+     * ============================================================
+     * DETERMINE ACTION AFTER HUMAN APPROVAL
+     * ============================================================
+     *
+     * Used when the original proposed action was HUMAN_REVIEW.
+     *
+     * The reviewer has now manually authorized the case,
+     * so the system selects a conservative deterministic action.
+     */
+
+    private RecoveryAction.ActionType determineReviewerApprovedAction(
+            RevenueRisk risk
+    ) {
+
+        if (risk.getReason() == null) {
+            return RecoveryAction.ActionType.STOP;
+        }
+
+        return switch (risk.getReason()) {
+
+            case EXPIRED_CARD ->
+                    RecoveryAction.ActionType.SEND_PAYMENT_LINK;
+
+            case INSUFFICIENT_FUNDS ->
+                    RecoveryAction.ActionType.WAIT_AND_RETRY;
+
+            case BANK_DECLINED ->
+                    RecoveryAction.ActionType.RETRY_PAYMENT;
+
+            case AUTHENTICATION_REQUIRED ->
+                    RecoveryAction.ActionType.REQUEST_AUTHENTICATION;
+
+            /*
+             * Suspected fraud should not automatically retry payment.
+             * Reviewer approval here confirms the case was reviewed,
+             * but the safest execution decision is still STOP.
+             */
+            case FRAUD_SUSPECTED ->
+                    RecoveryAction.ActionType.STOP;
+
+            /*
+             * Unknown failures are allowed one conservative retry
+             * after explicit human approval.
+             */
+            case UNKNOWN ->
+                    RecoveryAction.ActionType.RETRY_PAYMENT;
+        };
     }
 
     /*
