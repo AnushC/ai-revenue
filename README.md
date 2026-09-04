@@ -2,10 +2,7 @@
 
 > AI-assisted revenue recovery with deterministic guardrails and human oversight.
 
-RevenueAI is a full-stack platform for managing revenue at risk from failed subscription payments. It analyzes payment failures, recommends recovery actions, validates them against business rules, and tracks the final recovery outcome.
-
-
-
+RevenueAI is a full-stack platform for managing revenue at risk from failed subscription payments. It analyzes payment failures, recommends recovery actions, validates them against business rules, [...]
 
 The main idea is simple: **AI can recommend an action, but it does not get unrestricted execution authority.**
 
@@ -248,6 +245,21 @@ The dashboard tracks:
 - Recovery attempts
 
 This makes it possible to measure the result of the recovery workflow instead of only generating AI recommendations.
+
+---
+
+### Screenshots
+
+Below are screenshots from the app UI. To display them in the README, add the two image files to the repository at `assets/screenshots/overview.png` and `assets/screenshots/audit-log.png` (paths are case-sensitive).
+
+![Recovery Overview](assets/screenshots/overview.png)
+
+_Figure: Recovery Overview — shows revenue at risk, recovered revenue, recovery rate and the Gemini agent panel._
+
+
+![Audit Log](assets/screenshots/audit-log.png)
+
+_Figure: Audit Log — shows AI decisions, policy actions, fallbacks, and recovery outcomes._
 
 ---
 
